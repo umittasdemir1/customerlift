@@ -1,4 +1,7 @@
-flask
-pandas
-openpyxl
-gunicorn
+flask==2.3.3
+pandas==2.1.1
+openpyxl==3.1.2
+gunicorn==21.2.0
+plotly==5.17.0
+werkzeug==2.3.7
+numpy==1.24.3
