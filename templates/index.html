@@ -1,30 +1,342 @@
 <!DOCTYPE html>
-<html>
+<html lang="tr">
 <head>
-  <title>Müşteri Analiz Paneli</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analiz Sonuçları - Müşteri Analiz Paneli</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/plotly.js/2.26.0/plotly.min.js"></script>
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .container {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 15px 35px rgba(0,0,0,0.1);
+            padding: 40px;
+            margin: 30px auto;
+        }
+        .card {
+            border: none;
+            border-radius: 15px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+            margin-bottom: 20px;
+        }
+        .card-header {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+            border-radius: 15px 15px 0 0 !important;
+            font-weight: 600;
+        }
+        .metric-card {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+            border-radius: 15px;
+            padding: 20px;
+            text-align: center;
+            margin-bottom: 15px;
+        }
+        .metric-value {
+            font-size: 2rem;
+            font-weight: bold;
+            display: block;
+        }
+        .metric-label {
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+        .btn-primary {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            border: none;
+            border-radius: 10px;
+            padding: 12px 30px;
+            font-weight: 600;
+            transition: transform 0.3s ease;
+        }
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+        .interpretation {
+            background: #e3f2fd;
+            border-left: 4px solid #2196f3;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 15px 0;
+        }
+        .chart-container {
+            height: 400px;
+            width: 100%;
+        }
+        .pair-item {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 10px;
+            border-left: 4px solid #667eea;
+        }
+        .pair-count {
+            background: #667eea;
+            color: white;
+            border-radius: 20px;
+            padding: 5px 15px;
+            font-weight: bold;
+            float: right;
+        }
+    </style>
 </head>
 <body>
-  <h2>Excel Dosyanızı Yükleyin</h2>
-  <form action="/analyze" method="post" enctype="multipart/form-data">
-    <label>Excel Dosyası:</label>
-    <input type="file" name="file" required><br><br>
+    <div class="container">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1 class="display-4 text-primary">📊 {{ result.title }}</h1>
+            <a href="{{ url_for('index') }}" class="btn btn-primary">🔄 Yeni Analiz</a>
+        </div>
 
-    <label>Analiz Türü:</label>
-    <select name="analysis">
-      <option value="sales">Ürün Satış Analizi</option>
-      <option value="lift">Lift Analizi</option>
-      <option value="pair">Birlikte Satılan Ürünler</option>
-      <option value="time">Zaman Bazlı Satış</option>
-      <option value="customer">Müşteri Tipi</option>
-    </select><br><br>
+        {% if result.type == 'sales' %}
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <div class="metric-card">
+                    <span class="metric-value">{{ result.total_products }}</span>
+                    <span class="metric-label">Farklı Ürün Türü</span>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="metric-card">
+                    <span class="metric-value">{{ result.total_sales }}</span>
+                    <span class="metric-label">Toplam Satış</span>
+                </div>
+            </div>
+        </div>
 
-    <label>Ürün 1 (sadece Lift için):</label>
-    <input type="text" name="urun1"><br>
+        <div class="card">
+            <div class="card-header">
+                <h4 class="mb-0">📈 Satış Grafiği</h4>
+            </div>
+            <div class="card-body">
+                {% if chart %}
+                <div id="chart" class="chart-container"></div>
+                {% endif %}
+            </div>
+        </div>
 
-    <label>Ürün 2 (sadece Lift için):</label>
-    <input type="text" name="urun2"><br><br>
+        <div class="card">
+            <div class="card-header">
+                <h4 class="mb-0">📋 Detaylı Satış Listesi</h4>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>Sıra</th>
+                                <th>Ürün Grubu</th>
+                                <th>Satış Sayısı</th>
+                                <th>Yüzde</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for product, count in result.data.items() %}
+                            <tr>
+                                <td>{{ loop.index }}</td>
+                                <td>{{ product.title() }}</td>
+                                <td>{{ count }}</td>
+                                <td>{{ "%.1f"|format((count / result.total_sales) * 100) }}%</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
 
-    <button type="submit">Analizi Başlat</button>
-  </form>
+        {% elif result.type == 'lift' %}
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="metric-card">
+                    <span class="metric-value">{{ result.lift }}</span>
+                    <span class="metric-label">Lift Değeri</span>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="metric-card">
+                    <span class="metric-value">{{ result.confidence }}</span>
+                    <span class="metric-label">Güven</span>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="metric-card">
+                    <span class="metric-value">{{ result.support }}</span>
+                    <span class="metric-label">Destek</span>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="metric-card">
+                    <span class="metric-value">{{ result.together_sales }}</span>
+                    <span class="metric-label">Birlikte Satış</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="interpretation">
+            <h5>📊 Analiz Yorumu:</h5>
+            <p><strong>{{ result.interpretation }}</strong></p>
+            <ul>
+                <li>Lift > 1: Ürünler birlikte satılma eğiliminde</li>
+                <li>Lift = 1: Ürünler bağımsız</li>
+                <li>Lift < 1: Ürünler birlikte satılmıyor</li>
+            </ul>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h4 class="mb-0">📊 Detaylı İstatistikler</h4>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>Ürün Satış Bilgileri:</h6>
+                        <ul>
+                            <li>{{ result.product1_sales }} müşteri sadece ilk ürünü aldı</li>
+                            <li>{{ result.product2_sales }} müşteri sadece ikinci ürünü aldı</li>
+                            <li>{{ result.together_sales }} müşteri her ikisini de aldı</li>
+                        </ul>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>Oranlar:</h6>
+                        <ul>
+                            <li>Toplam müşteri: {{ result.total_customers }}</li>
+                            <li>Birlikte alma oranı: {{ "%.1f"|format((result.together_sales / result.total_customers) * 100) }}%</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {% elif result.type == 'pair' %}
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <div class="metric-card">
+                    <span class="metric-value">{{ result.pairs|length }}</span>
+                    <span class="metric-label">Gösterilen Çift</span>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="metric-card">
+                    <span class="metric-value">{{ result.total_pairs }}</span>
+                    <span class="metric-label">Toplam Çift</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h4 class="mb-0">👥 En Popüler Ürün Kombinasyonları</h4>
+            </div>
+            <div class="card-body">
+                {% for pair in result.pairs %}
+                <div class="pair-item">
+                    <span class="pair-count">{{ pair.count }}</span>
+                    <strong>{{ pair.products }}</strong>
+                    <div class="clearfix"></div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        {% elif result.type == 'time' %}
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <div class="metric-card">
+                    <span class="metric-value">{{ result.total_months }}</span>
+                    <span class="metric-label">Analiz Edilen Ay</span>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="metric-card">
+                    <span class="metric-value">{{ result.data.values()|sum }}</span>
+                    <span class="metric-label">Toplam Satış</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h4 class="mb-0">📅 Aylık Satış Trendi</h4>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>Ay</th>
+                                <th>Satış Sayısı</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for month, sales in result.data.items() %}
+                            <tr>
+                                <td>{{ month }}</td>
+                                <td>{{ sales }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        {% elif result.type == 'customer' %}
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="metric-card">
+                    <span class="metric-value">{{ result.total_customers }}</span>
+                    <span class="metric-label">Toplam Müşteri</span>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="metric-card">
+                    <span class="metric-value">{{ result.avg_products_per_customer }}</span>
+                    <span class="metric-label">Ort. Ürün/Müşteri</span>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="metric-card">
+                    <span class="metric-value">{{ result.avg_variety_per_customer }}</span>
+                    <span class="metric-label">Ort. Çeşit/Müşteri</span>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="metric-card">
+                    <span class="metric-value">{{ result.max_products }}</span>
+                    <span class="metric-label">Maks. Ürün</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="interpretation">
+            <h5>👤 Müşteri Profili Analizi:</h5>
+            <p>Müşterileriniz ortalama <strong>{{ result.avg_products_per_customer }}</strong> ürün alıyor ve 
+               <strong>{{ result.avg_variety_per_customer }}</strong> farklı ürün türü tercih ediyor.</p>
+        </div>
+        {% endif %}
+
+        <div class="text-center mt-4">
+            <a href="{{ url_for('index') }}" class="btn btn-primary btn-lg">
+                🔄 Yeni Analiz Yap
+            </a>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
+    
+    {% if chart %}
+    <script>
+        var chartData = {{ chart|safe }};
+        Plotly.newPlot('chart', chartData.data, chartData.layout, {responsive: true});
+    </script>
+    {% endif %}
 </body>
 </html>
